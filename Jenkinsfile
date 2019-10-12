@@ -3,55 +3,79 @@ pipeline {
 	stages {
 		stage('Lint HTML') {
 			steps {
-				sh 'echo "hi"'
+				sh 'tidy -q -e *.html'
 			}
 		}
 		stage('Lint Dockerfile') {
         	steps {
-            	sh 'ls'
+            	sh 'hadolint Dockerfile'
         	}
-      }
+      	}
 		stage('Build Docker Image') {
 			steps {
-				sh 'echo "hi"'
+				withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD']]){
+					sh '''
+						docker build -t ziyadmsq/cloudcapstone:$BUILD_ID .
+					'''
+				}
 			}
 		}
 
 		stage('Push Image To Dockerhub') {
 			steps {
-				sh 'echo "hi"'
+				withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD']]){
+					sh '''
+						docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
+						docker push ziyadmsq/cloudcapstone:$BUILD_ID
+					'''
+				}
 			}
 		}
 
 		stage('Set current kubectl context') {
 			steps {
-				sh 'echo "hi"'
+				withAWS(region:'us-east-1', credentials:'aws-static') {
+					sh '''
+						kubectl config use-context arn:aws:eks:us-east-1:517885445462:cluster/prodalvima2
+					'''
+				}
 			}
 		}
 
 		stage('Create blue container') {
 			steps {
-				sh 'echo "hi"'
+				withAWS(region:'us-east-1', credentials:'aws-static') {
+					sh '''
+						kubectl run blueimage --image=ziyadmsq/cloudcapstone:$BUILD_ID --port=80
+					'''
+				}
 			}
 		}
 
 		stage('Expose container') {
 			steps {
-				sh 'echo "hi"'
+				withAWS(region:'us-east-1', credentials:'aws-static') {
+					sh '''
+						kubectl expose deployment blueimage --type=LoadBalancer --port=80
+					'''
+				}
 			}
 		}
 
 		stage('Domain redirect blue') {
 			steps {
-				sh 'echo "hi"'
+				withAWS(region:'us-east-1', credentials:'aws-static') {
+					sh '''
+						aws route53 change-resource-record-sets --hosted-zone-id U7VD19G906ZKC --change-batch file://alias-record.json
+					'''
+				}
 			}
 		}
-      stage('Confirm!') {
+      stage('Confirm') {
 			steps {
-				sh 'echo "Greate!"'
+				sh 'figlet DONE'
 			}
 		}
-
 	}
 }
 // ======================== \\
